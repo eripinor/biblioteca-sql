@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Biblioteca Municipal · laboratorio de SQL</title>
+<style>
+:root{--bg:#f2f6fc;--fg:#14233d;--mut:#5a6a86;--card:#fff;--bd:#cfdcf0;--ac:#1d5fd1;--onac:#fff;--ok:#16825a;--ko:#c62828;--code:#e8f0fb;--gold:#0a74c4;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1a30;--fg:#e3ebfa;--mut:#8ea2c4;--card:#15243f;--bd:#27406a;--ac:#6aa8ff;--onac:#0a1730;--ok:#5fd3a0;--ko:#ff8c8c;--code:#1a2d4e;--gold:#4cc3ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1a30;--fg:#e3ebfa;--mut:#8ea2c4;--card:#15243f;--bd:#27406a;--ac:#6aa8ff;--onac:#0a1730;--ok:#5fd3a0;--ko:#ff8c8c;--code:#1a2d4e;--gold:#4cc3ff;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 Georgia,'Times New Roman',serif}
+main{max-width:900px;margin:0 auto;padding:20px 16px 60px}
+h1{margin:0;color:var(--ac);font-size:2rem}
+.sub{color:var(--mut);margin:4px 0 12px}
+.lv{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)}
+.lv b{width:90px;font-size:.8rem;color:var(--mut);font-weight:normal}
+.chip{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:4px 8px;font-size:.92rem}
+.chip.on{border-bottom-color:var(--gold);font-weight:bold}
+.chip i{font-style:normal;font-size:.75rem;background:var(--code);padding:1px 7px;border-radius:9px;margin-left:5px}
+.chip i.full{color:var(--ok)}
+button{font:inherit;font-size:.9rem;padding:6px 12px;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:6px;cursor:pointer}
+button.p{background:var(--ac);color:var(--onac);border-color:var(--ac)}
+button:disabled{opacity:.4;cursor:default}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px 16px;margin:12px 0}
+.card.m{border:2px solid var(--gold)}
+.tabs,.cols,.row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.cols span{font:.85rem ui-monospace,Menlo,monospace;background:var(--code);padding:2px 8px;border-radius:4px;cursor:pointer}
+textarea{width:100%;min-height:78px;font:.95rem ui-monospace,Menlo,monospace;background:var(--code);color:var(--fg);border:1px solid var(--bd);border-radius:6px;padding:8px;margin:8px 0 4px}
+.out{overflow-x:auto;margin-top:8px}
+table{border-collapse:collapse;font-size:.88rem}
+th,td{border:1px solid var(--bd);padding:3px 10px;text-align:left}
+th{background:var(--code)}
+.msg{margin-top:8px;font-weight:bold}
+.ok{color:var(--ok)}.ko{color:var(--ko)}
+h3{font-size:1.05rem;margin:0 0 2px}
+.bar{color:var(--mut);font-size:.9rem}
+.sol{font:.9rem ui-monospace,Menlo,monospace;white-space:pre-wrap;background:var(--code);padding:6px 8px;border-radius:6px;margin-top:6px}
+.hud{display:flex;flex-wrap:wrap;gap:16px;align-items:center;background:var(--card);border:2px solid var(--gold);border-radius:10px;padding:10px 16px;margin:12px 0}
+.hud big{font-size:1.5rem;color:var(--gold)}
+.meter{height:8px;background:var(--code);border-radius:4px;overflow:hidden;margin:8px 0}
+.meter div{height:100%;background:var(--ok);width:0;transition:width .3s}
+</style>
+</head>
+<body>
+<main>
+<h1>Biblioteca Municipal</h1>
+<p class="sub">Laboratorio de SQL · SQLite en el navegador · los ejercicios se corrigen solos</p>
+<div id="chips"></div>
+<div class="row"><button id="clr">Borrar mi progreso</button><span class="bar" id="prog" style="align-self:center"></span></div>
+<div class="meter"><div id="mt"></div></div>
+<details class="card" id="tb"><summary><b>Tablas de la biblioteca</b> (pincha para consultarlas)</summary>
+<div class="bar">Pincha en una tabla para ver sus columnas y unas filas. Si pinchas en una columna, se escribe en el recuadro donde estabas.</div>
+<div class="tabs" id="tabs"></div><div class="cols" id="cols"></div><div class="out" id="prev"></div>
+<div class="bar">Relaciones: libros.autor_id → autores.id · prestamos.socio_id → socios.id · prestamos.libro_id → libros.id · multas.prestamo_id → prestamos.id · eventos.sala_id → salas.id · inscripciones.evento_id → eventos.id · inscripciones.socio_id → socios.id · patrocinios.evento_id → eventos.id. Un préstamo con <code>fecha_devolucion</code> NULL sigue pendiente. Las fechas son texto <code>AAAA-MM-DD</code>.</div></details>
+<div id="ex"><p>Cargando la base de datos…</p></div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-asm.js"></script>
+<script>
+var SCHEMA={socios:['id','nombre','ciudad','fecha_alta'],autores:['id','nombre','pais'],libros:['id','titulo','autor_id','genero','anio','copias','precio'],prestamos:['id','socio_id','libro_id','fecha','fecha_devolucion'],multas:['id','prestamo_id','importe','pagada'],salas:['id','nombre','planta'],eventos:['id','nombre','fecha','sala_id','aforo','entrada'],inscripciones:['id','evento_id','socio_id','fecha','asistio'],patrocinios:['id','evento_id','empresa','importe']};
+var DATA="CREATE TABLE socios(id INTEGER PRIMARY KEY,nombre TEXT,ciudad TEXT,fecha_alta TEXT);CREATE TABLE autores(id INTEGER PRIMARY KEY,nombre TEXT,pais TEXT);CREATE TABLE libros(id INTEGER PRIMARY KEY,titulo TEXT,autor_id INTEGER,genero TEXT,anio INTEGER,copias INTEGER,precio REAL);CREATE TABLE prestamos(id INTEGER PRIMARY KEY,socio_id INTEGER,libro_id INTEGER,fecha TEXT,fecha_devolucion TEXT);CREATE TABLE multas(id INTEGER PRIMARY KEY,prestamo_id INTEGER,importe REAL,pagada INTEGER);CREATE TABLE salas(id INTEGER PRIMARY KEY,nombre TEXT,planta INTEGER);CREATE TABLE eventos(id INTEGER PRIMARY KEY,nombre TEXT,fecha TEXT,sala_id INTEGER,aforo INTEGER,entrada REAL);CREATE TABLE inscripciones(id INTEGER PRIMARY KEY,evento_id INTEGER,socio_id INTEGER,fecha TEXT,asistio INTEGER);CREATE TABLE patrocinios(id INTEGER PRIMARY KEY,evento_id INTEGER,empresa TEXT,importe REAL);"+
+"INSERT INTO socios VALUES(1,'Marta Ruiz','Granollers','2021-03-14'),(2,'Jordi Puig','Lliçà d’Amunt','2022-09-01'),(3,'Laia Serra','Mollet','2020-11-23'),(4,'Pau Vidal','Granollers','2023-02-07'),(5,'Nuria Coll','Lliçà d’Amunt','2024-01-19'),(6,'Oriol Mas','Mollet','2024-06-30');"+
+"INSERT INTO autores VALUES(1,'Carlos Ruiz Zafón','España'),(2,'Fernando Aramburu','España'),(3,'Yuval Noah Harari','Israel'),(4,'Umberto Eco','Italia'),(5,'Stephen Hawking','Reino Unido'),(6,'Gabriel García Márquez','Colombia'),(7,'Ana Torres','España'),(8,'Antoine de Saint-Exupéry','Francia');"+
+"INSERT INTO libros VALUES(1,'La sombra del viento',1,'Novela',2001,3,19.9),(2,'El juego del ángel',1,'Novela',2008,2,18.5),(3,'Patria',2,'Novela',2016,2,21),(4,'Sapiens',3,'Ensayo',2011,2,23.9),(5,'Homo Deus',3,'Ensayo',2015,1,24.5),(6,'El nombre de la rosa',4,'Novela',1980,1,22),(7,'Breve historia del tiempo',5,'Ensayo',1988,2,12.9),(8,'Cien años de soledad',6,'Novela',1967,4,17),(9,'Mi primer libro de ciencia',7,'Infantil',2019,5,15.5),(10,'El principito',8,'Infantil',1943,3,8.9),(11,'Atlas del mundo',NULL,'Referencia',2020,1,35);"+
+"INSERT INTO prestamos VALUES(1,1,1,'2024-10-02','2024-10-16'),(2,1,4,'2024-10-15','2024-10-29'),(3,2,8,'2024-10-20',NULL),(4,3,1,'2024-11-01','2024-11-14'),(5,3,9,'2024-11-05',NULL),(6,3,10,'2024-11-09',NULL),(7,4,3,'2024-11-12','2024-11-26'),(8,5,7,'2024-11-18',NULL),(9,1,8,'2024-11-20',NULL),(10,2,2,'2024-12-03','2024-12-20'),(11,4,5,'2024-12-10',NULL),(12,5,1,'2025-01-08','2025-01-22');"+
+"INSERT INTO multas VALUES(1,2,3.5,1),(2,4,1.2,0),(3,7,2,1),(4,10,5,0);"+
+"INSERT INTO salas VALUES(1,'Sala Cervantes',0),(2,'Aula Verdaguer',1),(3,'Sala Rodoreda',1);"+
+"INSERT INTO eventos VALUES(1,'Club de lectura','2025-03-04',1,20,0),(2,'Taller de poesía','2025-03-11',2,15,5),(3,'Cuentacuentos','2025-03-15',3,25,0),(4,'Charla: Zafón','2025-03-20',1,20,8),(5,'Taller de escritura','2025-04-02',2,12,10),(6,'Noche de libros','2025-04-23',1,30,12);"+
+"INSERT INTO inscripciones VALUES(1,1,1,'2025-02-20',1),(2,1,3,'2025-02-21',1),(3,1,4,'2025-02-25',0),(4,2,2,'2025-03-01',1),(5,2,3,'2025-03-02',1),(6,2,5,'2025-03-05',0),(7,3,1,'2025-03-10',1),(8,3,3,'2025-03-12',1),(9,3,5,'2025-03-12',1),(10,4,1,'2025-03-14',1),(11,4,2,'2025-03-15',1),(12,4,3,'2025-03-16',0),(13,5,2,'2025-03-20',NULL),(14,5,6,'2025-03-22',NULL),(15,6,1,'2025-04-01',NULL),(16,6,4,'2025-04-02',NULL),(17,6,5,'2025-04-03',NULL);"+
+"INSERT INTO patrocinios VALUES(1,4,'Librería Aurora',300),(2,6,'Caixa Vallès',500),(3,6,'Librería Aurora',250),(4,1,'Panadería Roca',80),(5,3,'Caixa Vallès',150);";
+var TOP=[['select',0,'SELECT'],['where',0,'WHERE'],['logic',0,'AND, OR, LIKE'],['order',0,'ORDER BY'],['count',0,'COUNT, SUM'],['group',0,'GROUP BY'],['nulls',1,'NULL y CASE'],['join',1,'JOIN'],['fechas',1,'Fechas'],['subs',1,'Subconsultas'],['dml',2,'Cambiar datos'],['with',2,'WITH'],['win',2,'Ventanas']];
+var LV=['Básico','Intermedio','Avanzado','Final'];
+var EXS=[
+{g:'select',t:'Catálogo',d:'Muestra el título y el año de todos los libros.',h:'SELECT columnas FROM tabla',s:"SELECT titulo, anio FROM libros"},
+{g:'select',t:'Todo sobre los autores',d:'Muestra todas las columnas de la tabla autores.',h:'SELECT * FROM …',s:"SELECT * FROM autores"},
+{g:'select',t:'Autores y país',d:'Muestra el nombre y el país de todos los autores.',h:'SELECT nombre, pais FROM …',s:"SELECT nombre, pais FROM autores"},
+{g:'select',t:'Países sin repetir',d:'Lista los países de los autores, sin repetir ninguno.',h:'SELECT DISTINCT …',s:"SELECT DISTINCT pais FROM autores"},
+{g:'select',t:'Etiqueta de libro',d:'Una sola columna con el título y el año entre paréntesis, por ejemplo: Patria (2016).',h:"Concatena con || : titulo || ' (' || anio || ')'",s:"SELECT titulo || ' (' || anio || ')' FROM libros"},
+{g:'where',t:'Novelas',d:'Título de los libros de género Novela.',h:"WHERE genero = 'Novela'",s:"SELECT titulo FROM libros WHERE genero='Novela'"},
+{g:'where',t:'Libros recientes',d:'Título y año de los libros publicados después de 2000.',h:'WHERE anio > 2000',s:"SELECT titulo, anio FROM libros WHERE anio>2000"},
+{g:'where',t:'Muchas copias',d:'Título y copias de los libros con 3 o más copias.',h:'WHERE copias >= 3',s:"SELECT titulo, copias FROM libros WHERE copias>=3"},
+{g:'where',t:'Socios de Mollet',d:'Nombre de los socios que viven en Mollet.',h:"WHERE ciudad = 'Mollet'",s:"SELECT nombre FROM socios WHERE ciudad='Mollet'"},
+{g:'where',t:'Entre 10 y 20 euros',d:'Título y precio de los libros que cuestan entre 10 y 20 euros (ambos incluidos).',h:'BETWEEN 10 AND 20',s:"SELECT titulo, precio FROM libros WHERE precio BETWEEN 10 AND 20"},
+{g:'logic',t:'Novelas modernas',d:'Título de las novelas publicadas después de 2000.',h:'Dos condiciones unidas con AND',s:"SELECT titulo FROM libros WHERE genero='Novela' AND anio>2000"},
+{g:'logic',t:'Ensayo o infantil',d:'Título y género de los libros de Ensayo o de Infantil.',h:'OR, o bien IN (…)',s:"SELECT titulo, genero FROM libros WHERE genero IN ('Ensayo','Infantil')"},
+{g:'logic',t:'Empiezan por “El”',d:'Títulos que empiezan por la palabra El.',h:"LIKE 'El %'",s:"SELECT titulo FROM libros WHERE titulo LIKE 'El %'"},
+{g:'logic',t:'Ni novela ni ensayo',d:'Título de los libros cuyo género no es Novela ni Ensayo.',h:"NOT IN ('Novela','Ensayo')",s:"SELECT titulo FROM libros WHERE genero NOT IN ('Novela','Ensayo')"},
+{g:'logic',t:'AND y OR a la vez',d:'Títulos de las novelas posteriores a 2000 o de cualquier libro con precio inferior a 10.',h:'Usa paréntesis: (… AND …) OR …',s:"SELECT titulo FROM libros WHERE (genero='Novela' AND anio>2000) OR precio<10"},
+{g:'order',t:'Género y año',d:'Título, género y año, ordenados por género (A-Z) y, dentro de cada género, del más reciente al más antiguo.',h:'ORDER BY genero, anio DESC',s:"SELECT titulo, genero, anio FROM libros ORDER BY genero, anio DESC"},
+{g:'order',t:'Los 3 más baratos',d:'Título y precio de los 3 libros más baratos.',h:'ORDER BY precio LIMIT 3',s:"SELECT titulo, precio FROM libros ORDER BY precio LIMIT 3"},
+{g:'order',t:'Alfabético',d:'Todos los títulos por orden alfabético.',h:'ORDER BY titulo',s:"SELECT titulo FROM libros ORDER BY titulo"},
+{g:'order',t:'Socios por antigüedad',d:'Nombre y fecha de alta de los socios, del más antiguo al más reciente.',h:'ORDER BY fecha_alta',s:"SELECT nombre, fecha_alta FROM socios ORDER BY fecha_alta"},
+{g:'order',t:'Del 3.º al 5.º más caro',d:'Título y precio de los libros que ocupan del 3.º al 5.º puesto de más caros.',h:'ORDER BY precio DESC LIMIT 3 OFFSET 2',s:"SELECT titulo, precio FROM libros ORDER BY precio DESC LIMIT 3 OFFSET 2"},
+{g:'count',t:'Cuántas novelas',d:'Número de libros de género Novela.',h:'COUNT(*) con WHERE',s:"SELECT COUNT(*) FROM libros WHERE genero='Novela'"},
+{g:'count',t:'Copias y precios',d:'Total de copias, precio mínimo y precio máximo (en ese orden).',h:'SUM(copias), MIN(precio), MAX(precio)',s:"SELECT SUM(copias), MIN(precio), MAX(precio) FROM libros"},
+{g:'count',t:'Cuántos socios',d:'Número total de socios.',h:'COUNT(*) FROM socios',s:"SELECT COUNT(*) FROM socios"},
+{g:'count',t:'Precio medio',d:'Precio medio de los libros, redondeado a 2 decimales.',h:'ROUND(AVG(precio), 2)',s:"SELECT ROUND(AVG(precio),2) FROM libros"},
+{g:'count',t:'Multas sin pagar',d:'Importe total de las multas que aún no están pagadas (pagada = 0).',h:'SUM(importe) con WHERE',s:"SELECT SUM(importe) FROM multas WHERE pagada=0"},
+{g:'group',t:'Libros por género',d:'Para cada género: número de libros y suma de copias.',h:'GROUP BY genero',s:"SELECT genero, COUNT(*), SUM(copias) FROM libros GROUP BY genero"},
+{g:'group',t:'Géneros grandes',d:'Géneros con más de 2 libros, con su total.',h:'HAVING COUNT(*) > 2',s:"SELECT genero, COUNT(*) FROM libros GROUP BY genero HAVING COUNT(*)>2"},
+{g:'group',t:'Socios por ciudad',d:'Para cada ciudad, cuántos socios hay.',h:'GROUP BY ciudad',s:"SELECT ciudad, COUNT(*) FROM socios GROUP BY ciudad"},
+{g:'group',t:'Préstamos por socio',d:'Para cada socio (por su id), cuántos préstamos tiene.',h:'GROUP BY socio_id',s:"SELECT socio_id, COUNT(*) FROM prestamos GROUP BY socio_id"},
+{g:'group',t:'Precio medio por género',d:'Para cada género, su precio medio con 2 decimales.',h:'ROUND(AVG(precio), 2) + GROUP BY genero',s:"SELECT genero, ROUND(AVG(precio),2) FROM libros GROUP BY genero"},
+{g:'nulls',t:'Sin autor',d:'Título de los libros sin autor asignado.',h:'IS NULL (no = NULL)',s:"SELECT titulo FROM libros WHERE autor_id IS NULL"},
+{g:'nulls',t:'Clásico o moderno',d:'Título y una etiqueta: Clásico si es anterior a 1990, Moderno si no.',h:'CASE WHEN … THEN … ELSE … END',s:"SELECT titulo, CASE WHEN anio<1990 THEN 'Clásico' ELSE 'Moderno' END FROM libros"},
+{g:'nulls',t:'Pendiente en vez de NULL',d:'Id del préstamo y su fecha de devolución; si no se ha devuelto, muestra Pendiente.',h:'COALESCE(fecha_devolucion, …)',s:"SELECT id, COALESCE(fecha_devolucion,'Pendiente') FROM prestamos"},
+{g:'nulls',t:'Libros con autor',d:'Cuántos libros tienen autor asignado.',h:'IS NOT NULL',s:"SELECT COUNT(*) FROM libros WHERE autor_id IS NOT NULL"},
+{g:'nulls',t:'Tramos de precio',d:'Título y tramo: Barato si cuesta menos de 15, Medio si menos de 25, Caro en otro caso.',h:'CASE con varios WHEN',s:"SELECT titulo, CASE WHEN precio<15 THEN 'Barato' WHEN precio<25 THEN 'Medio' ELSE 'Caro' END FROM libros"},
+{g:'join',t:'Libros y autores',d:'Título y nombre del autor (solo libros con autor).',h:'JOIN autores a ON a.id = l.autor_id',s:"SELECT l.titulo, a.nombre FROM libros l JOIN autores a ON a.id=l.autor_id"},
+{g:'join',t:'Todos los libros',d:'Título y autor de TODOS los libros; si no hay autor, muestra Anónimo.',h:'LEFT JOIN + COALESCE',s:"SELECT l.titulo, COALESCE(a.nombre,'Anónimo') FROM libros l LEFT JOIN autores a ON a.id=l.autor_id"},
+{g:'join',t:'Historial de préstamos',d:'Nombre del socio, título del libro y fecha de cada préstamo, por fecha.',h:'prestamos JOIN socios JOIN libros',s:"SELECT s.nombre, l.titulo, p.fecha FROM prestamos p JOIN socios s ON s.id=p.socio_id JOIN libros l ON l.id=p.libro_id ORDER BY p.fecha"},
+{g:'join',t:'Libros por autor',d:'Nombre de cada autor y cuántos libros tiene (solo autores con libros).',h:'JOIN + GROUP BY a.id',s:"SELECT a.nombre, COUNT(*) FROM libros l JOIN autores a ON a.id=l.autor_id GROUP BY a.id"},
+{g:'join',t:'Multas detalladas',d:'Socio, libro e importe de cada multa.',h:'multas → prestamos → socios y libros',s:"SELECT s.nombre, l.titulo, m.importe FROM multas m JOIN prestamos p ON p.id=m.prestamo_id JOIN socios s ON s.id=p.socio_id JOIN libros l ON l.id=p.libro_id"},
+{g:'fechas',t:'Préstamos de noviembre',d:'Id y fecha de los préstamos de noviembre de 2024.',h:"BETWEEN '2024-11-01' AND '2024-11-30'",s:"SELECT id, fecha FROM prestamos WHERE fecha BETWEEN '2024-11-01' AND '2024-11-30'"},
+{g:'fechas',t:'Duración',d:'Id y días que duró cada préstamo ya devuelto.',h:'julianday(fecha_devolucion) - julianday(fecha)',s:"SELECT id, julianday(fecha_devolucion)-julianday(fecha) FROM prestamos WHERE fecha_devolucion IS NOT NULL"},
+{g:'fechas',t:'Préstamos por mes',d:'Cada mes (AAAA-MM) con su número de préstamos, en orden cronológico.',h:"strftime('%Y-%m', fecha) y GROUP BY",s:"SELECT strftime('%Y-%m',fecha), COUNT(*) FROM prestamos GROUP BY 1 ORDER BY 1"},
+{g:'fechas',t:'Año de alta',d:'Nombre de cada socio y año en que se dio de alta.',h:"strftime('%Y', fecha_alta)",s:"SELECT nombre, strftime('%Y',fecha_alta) FROM socios"},
+{g:'fechas',t:'Más de dos semanas',d:'Id de los préstamos devueltos que duraron más de 14 días.',h:'julianday(…) - julianday(…) > 14',s:"SELECT id FROM prestamos WHERE fecha_devolucion IS NOT NULL AND julianday(fecha_devolucion)-julianday(fecha)>14"},
+{g:'subs',t:'Socios sin préstamos',d:'Nombre de los socios que nunca han pedido un libro.',h:'NOT IN (SELECT socio_id FROM prestamos)',s:"SELECT nombre FROM socios WHERE id NOT IN (SELECT socio_id FROM prestamos)"},
+{g:'subs',t:'Más antiguos que la media',d:'Títulos de los libros anteriores al año medio del catálogo.',h:'WHERE anio < (SELECT AVG(anio) …)',s:"SELECT titulo FROM libros WHERE anio<(SELECT AVG(anio) FROM libros)"},
+{g:'subs',t:'Caros para su género',d:'Títulos de libros más caros que el precio medio de su propio género.',h:'Subconsulta correlacionada: … WHERE genero = l.genero',s:"SELECT titulo FROM libros l WHERE precio>(SELECT AVG(precio) FROM libros WHERE genero=l.genero)"},
+{g:'subs',t:'Libros nunca prestados',d:'Título de los libros que no aparecen en ningún préstamo.',h:'NOT IN (SELECT libro_id FROM prestamos)',s:"SELECT titulo FROM libros WHERE id NOT IN (SELECT libro_id FROM prestamos)"},
+{g:'subs',t:'Sobre la media',d:'Título y precio de los libros más caros que el precio medio de todo el catálogo.',h:'WHERE precio > (SELECT AVG(precio) FROM libros)',s:"SELECT titulo, precio FROM libros WHERE precio>(SELECT AVG(precio) FROM libros)"},
+{g:'dml',t:'Cambio de ciudad',d:'Nuria Coll (id 5) se ha mudado a Granollers. Actualízala.',h:'UPDATE socios SET … WHERE id = 5',s:"UPDATE socios SET ciudad='Granollers' WHERE id=5",v:"SELECT * FROM socios ORDER BY id"},
+{g:'dml',t:'Nuevo socio',d:'Da de alta a Eva Roca (id 7), de Mollet, con fecha de alta 2025-02-01.',h:'INSERT INTO socios VALUES (…)',s:"INSERT INTO socios VALUES(7,'Eva Roca','Mollet','2025-02-01')",v:"SELECT * FROM socios ORDER BY id"},
+{g:'dml',t:'Limpiar multas',d:'Borra las multas que ya están pagadas.',h:'DELETE FROM multas WHERE pagada = 1',s:"DELETE FROM multas WHERE pagada=1",v:"SELECT * FROM multas ORDER BY id"},
+{g:'dml',t:'Descuento infantil',d:'Baja 1 € el precio de todos los libros infantiles.',h:'UPDATE libros SET precio = precio - 1 WHERE …',s:"UPDATE libros SET precio=precio-1 WHERE genero='Infantil'",v:"SELECT * FROM libros ORDER BY id"},
+{g:'dml',t:'Baja de inactivos',d:'Borra los socios que nunca han hecho ningún préstamo.',h:'DELETE FROM socios WHERE id NOT IN (SELECT …)',s:"DELETE FROM socios WHERE id NOT IN (SELECT socio_id FROM prestamos)",v:"SELECT * FROM socios ORDER BY id"},
+{g:'with',t:'Socios lectores',d:'Con un WITH que cuente los préstamos de cada socio, muestra el nombre y el total de quienes tienen 3 o más.',h:'WITH p AS (SELECT socio_id, COUNT(*) n …) SELECT … JOIN socios',s:"WITH p AS (SELECT socio_id, COUNT(*) n FROM prestamos GROUP BY socio_id) SELECT s.nombre, p.n FROM p JOIN socios s ON s.id=p.socio_id WHERE p.n>=3"},
+{g:'with',t:'Caros para su género (WITH)',d:'Resuelve “títulos más caros que la media de su género” usando un WITH con la media por género.',h:'WITH m AS (SELECT genero, AVG(precio) media …) … JOIN m',s:"WITH m AS (SELECT genero, AVG(precio) media FROM libros GROUP BY genero) SELECT l.titulo FROM libros l JOIN m ON m.genero=l.genero WHERE l.precio>m.media"},
+{g:'with',t:'Libros muy pedidos',d:'Título y veces prestado de los libros prestados más veces que la media de veces por libro (calcula antes las veces con un WITH).',h:'WITH v AS (…) … WHERE veces > (SELECT AVG(veces) FROM v)',s:"WITH v AS (SELECT libro_id, COUNT(*) veces FROM prestamos GROUP BY libro_id) SELECT l.titulo, v.veces FROM v JOIN libros l ON l.id=v.libro_id WHERE v.veces>(SELECT AVG(veces) FROM v)"},
+{g:'with',t:'Multas por socio',d:'Con un WITH que sume las multas de cada socio, muestra nombre y total, de mayor a menor.',h:'WITH m AS (multas JOIN prestamos · SUM(importe) · GROUP BY socio_id) …',s:"WITH m AS (SELECT p.socio_id, SUM(x.importe) total FROM multas x JOIN prestamos p ON p.id=x.prestamo_id GROUP BY p.socio_id) SELECT s.nombre, m.total FROM m JOIN socios s ON s.id=m.socio_id ORDER BY m.total DESC"},
+{g:'with',t:'Dos WITH encadenados',d:'Primero los préstamos por socio y luego su media (dos WITH). Muestra nombre y total de los socios por encima de esa media.',h:'WITH p AS (…), a AS (SELECT AVG(n) media FROM p) … JOIN a ON p.n > a.media',s:"WITH p AS (SELECT socio_id, COUNT(*) n FROM prestamos GROUP BY socio_id), a AS (SELECT AVG(n) media FROM p) SELECT s.nombre, p.n FROM p JOIN socios s ON s.id=p.socio_id JOIN a ON p.n>a.media"},
+{g:'win',t:'Ranking por género',d:'Título, género y posición del libro por precio (el más caro es el 1) dentro de su género. Ordena por género y posición.',h:'ROW_NUMBER() OVER (PARTITION BY genero ORDER BY precio DESC)',s:"SELECT titulo, genero, ROW_NUMBER() OVER (PARTITION BY genero ORDER BY precio DESC) AS pos FROM libros ORDER BY genero, pos"},
+{g:'win',t:'Multas acumuladas',d:'Id, importe y total acumulado de las multas ordenadas por id.',h:'SUM(importe) OVER (ORDER BY id)',s:"SELECT id, importe, SUM(importe) OVER (ORDER BY id) FROM multas ORDER BY id"},
+{g:'win',t:'Préstamo anterior',d:'Socio, fecha de cada préstamo y fecha de su préstamo anterior (NULL si es el primero). Ordena por socio y fecha.',h:'LAG(fecha) OVER (PARTITION BY socio_id ORDER BY fecha)',s:"SELECT socio_id, fecha, LAG(fecha) OVER (PARTITION BY socio_id ORDER BY fecha) FROM prestamos ORDER BY socio_id, fecha"},
+{g:'win',t:'RANK con empates',d:'Título, copias y puesto por número de copias (más copias = puesto 1; los empates comparten puesto). Ordena por puesto y título.',h:'RANK() OVER (ORDER BY copias DESC)',s:"SELECT titulo, copias, RANK() OVER (ORDER BY copias DESC) AS puesto FROM libros ORDER BY puesto, titulo"},
+{g:'win',t:'Frente a la media del género',d:'Título, género, precio y precio medio de su género (2 decimales) en la misma fila.',h:'ROUND(AVG(precio) OVER (PARTITION BY genero), 2)',s:"SELECT titulo, genero, precio, ROUND(AVG(precio) OVER (PARTITION BY genero),2) FROM libros"},
+{g:'mision',p:100,t:'Los eventos de pago',d:'La directora quiere ver los eventos con entrada (entrada mayor que 0): nombre y precio, del más caro al más barato.',h:'WHERE + ORDER BY … DESC',s:"SELECT nombre, entrada FROM eventos WHERE entrada>0 ORDER BY entrada DESC"},
+{g:'mision',p:150,t:'Llenar las salas',d:'Para cada evento: su nombre, el nombre de la sala y cuántas inscripciones tiene. Orden: más inscritos primero y, a igualdad, por nombre del evento.',h:'eventos JOIN salas LEFT JOIN inscripciones · GROUP BY e.id',s:"SELECT e.nombre, s.nombre, COUNT(i.id) FROM eventos e JOIN salas s ON s.id=e.sala_id LEFT JOIN inscripciones i ON i.evento_id=e.id GROUP BY e.id ORDER BY COUNT(i.id) DESC, e.nombre"},
+{g:'mision',p:200,t:'Aforo y calendario',d:'Para cada evento: nombre, ocupación (inscritos sobre aforo, en %, con 1 decimal) y estado: Pasado si su fecha es anterior a 2025-04-01, Próximo si no. Orden: mayor ocupación primero y, a igualdad, por nombre.',h:'ROUND(100.0 * COUNT(i.id) / e.aforo, 1) · CASE sobre e.fecha',s:"SELECT e.nombre, ROUND(100.0*COUNT(i.id)/e.aforo,1) AS ocupacion, CASE WHEN e.fecha<'2025-04-01' THEN 'Pasado' ELSE 'Próximo' END FROM eventos e JOIN inscripciones i ON i.evento_id=e.id GROUP BY e.id ORDER BY ocupacion DESC, e.nombre"},
+{g:'mision',p:250,t:'Los que nunca vienen',d:'Nombre de los socios que se han inscrito a algún evento pero nunca han asistido a ninguno (asistio = 1).',h:'id IN (SELECT socio_id …) AND id NOT IN (… WHERE asistio = 1)',s:"SELECT nombre FROM socios WHERE id IN (SELECT socio_id FROM inscripciones) AND id NOT IN (SELECT socio_id FROM inscripciones WHERE asistio=1)"},
+{g:'mision',p:300,t:'El balance',d:'Ingresos de cada evento = entrada × asistentes reales (asistio = 1) + patrocinios. Muestra nombre e ingresos de TODOS los eventos, de más a menos ingresos y, a igualdad, por nombre. Usa WITH.',h:'Dos CTE (asistentes y patrocinios) · LEFT JOIN · COALESCE(…, 0)',s:"WITH asis AS (SELECT evento_id, COUNT(*) n FROM inscripciones WHERE asistio=1 GROUP BY evento_id), pat AS (SELECT evento_id, SUM(importe) t FROM patrocinios GROUP BY evento_id) SELECT e.nombre, e.entrada*COALESCE(a.n,0)+COALESCE(p.t,0) AS ingresos FROM eventos e LEFT JOIN asis a ON a.evento_id=e.id LEFT JOIN pat p ON p.evento_id=e.id ORDER BY ingresos DESC, e.nombre"},
+{g:'mision',p:400,t:'JEFE FINAL · Los socios más fieles',d:'Ranking de todos los socios por asistencias (inscripciones con asistio = 1; 0 si ninguna). Muestra nombre, asistencias y puesto con RANK() (los empates comparten puesto). Ordena por puesto y, a igualdad, por nombre.',h:'WITH a AS (socios LEFT JOIN inscripciones ON … AND asistio = 1 · COUNT · GROUP BY) SELECT …, RANK() OVER (ORDER BY asistencias DESC)',s:"WITH a AS (SELECT s.id, s.nombre, COUNT(i.id) AS asistencias FROM socios s LEFT JOIN inscripciones i ON i.socio_id=s.id AND i.asistio=1 GROUP BY s.id) SELECT nombre, asistencias, RANK() OVER (ORDER BY asistencias DESC) AS puesto FROM a ORDER BY puesto, nombre"}
+];
+var SQL,fdb,base,st,cur='select',lastTa=null;
+function load(){st={solved:{},ans:{},pen:{},pts:{},unl:0};try{var x=JSON.parse(localStorage.getItem('bib-sql5'));if(x)for(var k in x)st[k]=x[k]}catch(e){}}
+function save(){try{localStorage.setItem('bib-sql5',JSON.stringify(st))}catch(e){}}
+function newDb(){var d=new SQL.Database();d.run(DATA);return d}
+function last(d,sql){var r=d.exec(sql);return r.length?r[r.length-1]:{columns:[],values:[]}}
+function table(r){var t=document.createElement('table'),h=t.insertRow();r.columns.forEach(function(c){var th=document.createElement('th');th.textContent=c;h.appendChild(th)});
+r.values.slice(0,60).forEach(function(v){var tr=t.insertRow();v.forEach(function(x){tr.insertCell().textContent=x===null?'NULL':x})});return t}
+function norm(r,sorted){var a=r.values.map(function(v){return JSON.stringify(v)});return sorted?a.sort():a}
+function show(d,sql,out,msg){out.innerHTML='';msg.textContent='';msg.className='msg';
+try{var r=last(d,sql);if(r.columns.length){out.appendChild(table(r));msg.className='msg bar';msg.textContent=r.values.length+' fila(s)'}
+else{msg.className='msg bar';msg.textContent='Hecho. Filas modificadas: '+d.getRowsModified()}return r}
+catch(x){msg.className='msg ko';msg.textContent='Error: '+x.message;return null}}
+function withV(sql,v){return v?sql.replace(/[;\s]+$/,'')+';'+v:sql}
+function cnt(k){var t=0,s=0;EXS.forEach(function(e,i){if(e.g===k){t++;if(st.solved[i])s++}});return[s,t]}
+function topics(){var t=0,s=0;EXS.forEach(function(e,i){if(e.g!=='mision'){t++;if(st.solved[i])s++}});return[s,t]}
+function unlocked(){return 1}
+function pts(){var n=0;for(var k in st.pts)n+=st.pts[k];return n}
+function rango(p,done){return done?'Maestro/a de Letras':p<300?'Aprendiz de archivo':p<800?'Archivero/a':'Bibliotecario/a jefe'}
+function chips(){var c=document.getElementById('chips');c.innerHTML='';
+for(var l=0;l<4;l++){var row=document.createElement('div');row.className='lv';row.innerHTML='<b>'+LV[l]+'</b>';
+var list=l<3?TOP.filter(function(t){return t[1]===l}):[['mision',3,'Misión'],['practica',3,'Práctica']];
+list.forEach(function(t){var b=document.createElement('button');b.className='chip'+(t[0]===cur?' on':'');var n=document.createElement('i');
+if(t[0]==='mision'){n.textContent=unlocked()?pts()+' pts':'cerrado';var m=cnt('mision');if(m[0]===m[1])n.className='full'}
+else if(t[0]==='practica'){n.textContent='libre'}
+else{var q=cnt(t[0]);n.textContent=q[0]+'/'+q[1];if(q[0]===q[1])n.className='full'}
+b.textContent=t[2];b.appendChild(n);b.onclick=function(){cur=t[0];draw()};row.appendChild(b)});c.appendChild(row)}
+var a=topics();document.getElementById('prog').textContent='Resueltos: '+a[0]+' de '+a[1]+' (más la misión)';document.getElementById('mt').style.width=(100*a[0]/a[1])+'%'}
+function card(e,i,box,locked){var c=document.createElement('div');c.className='card'+(e.g==='mision'?' m':'');
+var m=e.g==='mision';
+c.innerHTML='<h3></h3><div class="bar"></div>'+(locked?'<div class="msg bar">🔒 Resuelve el reto anterior para desbloquear este.</div>':'<textarea spellcheck="false" placeholder="Escribe tu consulta SQL aquí…"></textarea><div class="row"><button class="p">Ejecutar</button><button>Comprobar</button><button>Pista</button><button>Ver solución</button></div><div class="out"></div><div class="msg"></div><div class="sol" hidden></div>');
+var hd=c.querySelector('h3');
+function title(){hd.textContent=(m?'Reto '+(i-EXS.findIndex(function(x){return x.g==='mision'})+1)+' · ':(i+1)+'. ')+e.t+(m?' ('+e.p+' pts)':'')+(st.solved[i]?(m?' ⭐ +'+st.pts[i]:' ✓'):'')}
+title();c.querySelector('.bar').textContent=e.d;box.appendChild(c);if(locked)return;
+var ta=c.querySelector('textarea'),out=c.querySelector('.out'),msg=c.querySelector('.msg'),sol=c.querySelector('.sol'),b=c.querySelectorAll('button');
+ta.value=st.ans[i]||'';if(m)ta.style.minHeight='120px';
+ta.onfocus=function(){lastTa=ta};
+ta.oninput=function(){st.ans[i]=ta.value;save()};
+ta.onkeydown=function(ev){if((ev.ctrlKey||ev.metaKey)&&ev.key==='Enter')b[0].click()};
+b[0].onclick=function(){show(newDb(),ta.value,out,msg)};
+b[1].onclick=function(){var r=show(newDb(),withV(ta.value,e.v),out,msg);if(!r)return;
+if(!r.columns.length){msg.className='msg ko';msg.textContent='Tu consulta no devuelve ningún resultado que comprobar.';return}
+var sl=last(newDb(),withV(e.s,e.v)),sorted=!/ORDER BY/i.test(e.s)||!!e.v;
+var ok=JSON.stringify(norm(r,sorted))===JSON.stringify(norm(sl,sorted));
+if(ok){msg.className='msg ok';msg.textContent='¡Correcto!';if(!st.solved[i]){st.solved[i]=1;if(m)st.pts[i]=Math.max(Math.round(e.p*.2),e.p-(st.pen[i]||0))}save();if(m)draw();else{title();chips()}}
+else{msg.className='msg ko';msg.textContent='Todavía no: el resultado no coincide (se esperaban '+sl.values.length+' filas y '+sl.columns.length+' columnas). Revisa filtros, columnas y orden.'}};
+b[2].onclick=function(){sol.hidden=false;sol.textContent='Pista: '+e.h;if(m&&!st.solved[i]){st.pen[i]=Math.max(st.pen[i]||0,30);save()}};
+b[3].onclick=function(){sol.hidden=false;sol.textContent=e.s;if(m&&!st.solved[i]){st.pen[i]=60;save()}}}
+function draw(){chips();var box=document.getElementById('ex');box.innerHTML='';
+if(cur==='practica'){var c=document.createElement('div');c.className='card';c.innerHTML='<h3>Zona libre</h3><div class="bar">Prueba lo que quieras. Los cambios se conservan hasta restaurar la base de datos. Atajo: Ctrl + Intro.</div><textarea spellcheck="false" placeholder="SELECT * FROM libros;"></textarea><div class="row"><button class="p">Ejecutar</button><button>Restaurar la base de datos</button></div><div class="out"></div><div class="msg"></div>';
+var ta=c.querySelector('textarea'),bb=c.querySelectorAll('button'),out=c.querySelector('.out'),msg=c.querySelector('.msg');
+ta.onfocus=function(){lastTa=ta};function go(){show(fdb,ta.value,out,msg)}bb[0].onclick=go;
+ta.onkeydown=function(ev){if((ev.ctrlKey||ev.metaKey)&&ev.key==='Enter')go()};
+bb[1].onclick=function(){fdb.close();fdb=newDb();out.innerHTML='';msg.className='msg bar';msg.textContent='Base de datos restaurada.'};box.appendChild(c);return}
+if(cur==='mision'){var a=topics(),first=EXS.findIndex(function(x){return x.g==='mision'});
+if(!unlocked()){var c=document.createElement('div');c.className='card m';c.innerHTML='<h3>🔒 Misión cerrada</h3><div class="bar"></div>';c.querySelector('.bar').textContent='Se abre al resolver el 75 % de los ejercicios de los tres niveles. Llevas '+a[0]+' de '+a[1]+'.';var bt=document.createElement('button');bt.textContent='Abrir ya';bt.onclick=function(){st.unl=1;save();draw()};c.appendChild(bt);box.appendChild(c);return}
+var tot=EXS.filter(function(x){return x.g==='mision'}).reduce(function(s,x){return s+x.p},0),m=cnt('mision'),p=pts();
+var h=document.createElement('div');h.className='hud';h.innerHTML='<div>Puntos<br><big></big> / '+tot+'</div><div>Rango<br><b></b></div><div>Retos<br><b></b></div>';
+h.querySelector('big').textContent=p;h.querySelectorAll('b')[0].textContent=rango(p,m[0]===m[1]);h.querySelectorAll('b')[1].textContent=m[0]+' de '+m[1]+(m[0]===m[1]?' · ¡Misión cumplida! 🎉':'');box.appendChild(h);
+var i0=document.createElement('div');i0.className='card m';i0.innerHTML='<h3>Misión: la Noche de libros</h3><div class="bar">El 23 de abril la biblioteca celebra su gran Noche de libros y la directora necesita un informe. Tienes que analizar los eventos de la primavera con las tablas nuevas <b>salas, eventos, inscripciones y patrocinios</b> (más socios). Cada reto desbloquea el siguiente y cada uno junta varias técnicas. Sin pistas, puntos completos: la pista cuesta 30 puntos y ver la solución, 60.</div>';box.appendChild(i0);
+EXS.forEach(function(e,i){if(e.g==='mision')card(e,i,box,i>first&&!st.solved[i-1])});return}
+EXS.forEach(function(e,i){if(e.g===cur)card(e,i,box,false)})}
+function buildTabs(){var t=document.getElementById('tabs');Object.keys(SCHEMA).forEach(function(n){var b=document.createElement('button');b.textContent=n;b.onclick=function(){var c=document.getElementById('cols'),p=document.getElementById('prev');c.innerHTML='';SCHEMA[n].forEach(function(col){var s=document.createElement('span');s.textContent=col;s.onclick=function(){if(lastTa){var v=lastTa.value;lastTa.value+=(v&&!/\s$/.test(v)?' ':'')+col;lastTa.dispatchEvent(new Event('input'));lastTa.focus()}};c.appendChild(s)});p.innerHTML='';if(base)p.appendChild(table(last(base,'SELECT * FROM '+n+' LIMIT 6')))};t.appendChild(b)})}
+document.getElementById('clr').onclick=function(){load0();st={solved:{},ans:{},pen:{},pts:{},unl:0};save();draw()};
+function load0(){}
+load();buildTabs();
+initSqlJs().then(function(S){SQL=S;fdb=newDb();base=newDb();draw()}).catch(function(e){document.getElementById('ex').textContent='No se pudo cargar la base de datos: '+e.message});
+</script>
+</body>
+</html>
